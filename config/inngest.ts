@@ -3,6 +3,7 @@
 import { Inngest } from "inngest";
 import dbConnect from "./db";
 import User from "@/models/User";
+import Order from "@/models/Order";
 
 export const inngest = new Inngest({
   id: "quickcart-next",
@@ -51,7 +52,7 @@ export const syncUserUpdate = inngest.createFunction(
 
     await dbConnect();
     await User.findByIdAndUpdate(id, userData);
-  }
+  },
 );
 
 // Inngest function to delete user data from database
@@ -67,5 +68,34 @@ export const syncUserDeletion = inngest.createFunction(
 
     await dbConnect();
     await User.findByIdAndDelete(id);
-  }
+  },
+);
+
+// inngest function to create user order in db
+export const createUserOrder = inngest.createFunction(
+  {
+    id: "create-user-order",
+    batchEvents: {
+      maxSize: 25,
+      timeout: "5s",
+    },
+    triggers: {
+      event: "order/created",
+    },
+  },
+  async ({ events }) => {
+    const orders = events.map((event) => {
+      return {
+        userId: event.data.userId,
+        items: event.data.items,
+        amount: event.data.amount,
+        address: event.data.address,
+        status: event.data.status,
+        created_at: event.data.created_at,
+      };
+    });
+    await dbConnect();
+    await Order.insertMany(orders);
+    return { success: true, processed: orders.length };
+  },
 );
