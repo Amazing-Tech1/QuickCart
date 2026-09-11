@@ -18,6 +18,8 @@ export const syncUserCreation = inngest.createFunction(
     },
   },
   async ({ event }) => {
+    console.log("🔥 INNGEST USER CREATED EVENT:", event.data);
+
     const { id, first_name, last_name, email_addresses, image_url } = event.data;
 
     const userData = {
@@ -27,8 +29,18 @@ export const syncUserCreation = inngest.createFunction(
       imageUrl: image_url,
     };
 
+    console.log("🔥 CREATING MONGODB USER:", userData);
+
     await dbConnect();
-    await User.create(userData);
+
+    const user = await User.create(userData);
+
+    console.log("🔥 MONGODB USER CREATED:", user);
+
+    return {
+      success: true,
+      userId: id,
+    };
   },
 );
 
@@ -94,7 +106,16 @@ export const createUserOrder = inngest.createFunction(
         created_at: event.data.created_at,
       };
     });
+    console.log("🔥 ORDER FUNCTION STARTED");
+    if (process.env.MONGODB_URI) {
+      const mongoUri = new URL(process.env.MONGODB_URI);
+      console.log("MongoDB target:", {
+        host: mongoUri.host,
+        database: mongoUri.pathname || "/quickcart",
+      });
+    }
     await dbConnect();
+    console.log("🔥 INNGEST CONNECTED TO MONGODB");
     await Order.insertMany(orders);
     return { success: true, processed: orders.length };
   },

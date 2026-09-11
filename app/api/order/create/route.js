@@ -10,35 +10,87 @@ export async function POST(request) {
     const { userId } = await auth();
     const { address, items } = await request.json();
 
-    if (!address || !items.length === 0) {
-      return NextResponse.json({ success: false, message: "Invalid Data" }, { status: 400 });
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized",
+        },
+        { status: 401 },
+      );
     }
 
-    const amount = await items.reduce(async (acc, item) => {
+    if (!address || !items || items.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid Data",
+        },
+        { status: 400 },
+      );
+    }
+
+    let amount = 0;
+    const orderItems = [];
+
+    for (const item of items) {
       const product = await Product.findById(item.product);
-      return acc + product.offerPrice * item.quantity;
-    }, 0);
+
+      if (!product) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Product not found",
+          },
+          { status: 404 },
+        );
+      }
+
+      const price = product.offerPrice;
+
+      amount += price * item.quantity;
+
+      orderItems.push({
+        product: item.product,
+        quantity: item.quantity,
+        price: price,
+      });
+    }
+
+    const totalAmount = amount + Math.floor(amount * 0.02);
 
     await inngest.send({
       name: "order/created",
       data: {
         userId,
         address,
-        items,
-        amount: amount + Math.floor(amount * 0.02),
+        items: orderItems,
+        amount: totalAmount,
         created_at: Date.now(),
       },
     });
-    //clear userCart
+
+    // Clear user cart
     const user = await User.findById(userId);
-    user.cartItems = {};
-    await user.save();
+
+    if (user) {
+      user.cartItems = {};
+      await user.save();
+    }
+
     return NextResponse.json({
       success: true,
       message: "Orders Placed successfully",
     });
   } catch (error) {
     console.error("Error placing order:", error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: error.message,
+      },
+      { status: 500 },
+    );
   }
 }
